@@ -6,8 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.hisaabkit.app.navigation.AppNavigation
 import com.hisaabkit.app.ui.theme.HisaabKitTheme
-import com.hisaabkit.app.ui.screens.HomeScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -15,11 +15,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
+
             HisaabKitTheme {
+
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    HomeScreen()
+
+                    AppNavigation()
                 }
             }
         }
