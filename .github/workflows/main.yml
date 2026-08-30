@@ -19,7 +19,7 @@ jobs:
         run: |
           set -e
 
-          if [ ! -f "HisaabKit-fixed.zip" ]; then
+          if [ ! -f "ZIP="HisaabKit-build-ready.zip" ]; then
             echo "ERROR: HisaabKit-fixed.zip not found"
             exit 1
           fi
