@@ -29,9 +29,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import kotlin.math.roundToInt
 
-// ✅ FIX 1: AppContextHolder import
 import com.hisaabkit.app.utils.AppContextHolder
 
 private val PhotoPurple = Color(0xFF7C3AED)
@@ -193,8 +194,6 @@ fun PhotoResizerScreen() {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp, vertical = 16.dp)
     ) {
-
-        // HEADER
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -224,8 +223,6 @@ fun PhotoResizerScreen() {
         }
 
         Spacer(Modifier.height(22.dp))
-
-        // SELECT PHOTO
         SectionTitle("1. Photo Select करें")
         Spacer(Modifier.height(10.dp))
 
@@ -247,8 +244,6 @@ fun PhotoResizerScreen() {
                 InfoRow("File Size", formatSize(originalSizeKb))
             }
             Spacer(Modifier.height(22.dp))
-
-            // SETTINGS
             SectionTitle("2. Resize Settings")
             Spacer(Modifier.height(10.dp))
 
@@ -353,8 +348,6 @@ fun PhotoResizerScreen() {
     }
 }
 
-// ---------------- UI HELPER COMPONENTS ---------------- //
-
 @Composable
 fun SectionTitle(title: String) {
     Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PhotoPurple)
@@ -387,16 +380,15 @@ fun formatSize(kb: Int): String {
     return if (kb >= 1024) String.format("%.2f MB", kb / 1024f) else "$kb KB"
 }
 
-// ---------------- BACKEND LOGIC (ALL ERRORS FIXED HERE) ---------------- //
-
 data class ImageInfo(val width: Int, val height: Int, val sizeKb: Int)
 data class CompressResult(val bytes: ByteArray, val width: Int, val height: Int, val sizeKb: Int)
 
 fun readImageInfo(uri: Uri): ImageInfo? {
     val context = AppContextHolder.currentContext
     return try {
-        // ✅ FIX 2: Explicit variable name added (inputStream)
-        val bytes = context.contentResolver.openInputStream(uri)?.use { inputStream -> inputStream.readBytes() }
+        val bytes = context.contentResolver.openInputStream(uri)?.use { inputStream: InputStream -> 
+            inputStream.readBytes() 
+        }
         if (bytes != null) {
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) {
@@ -412,8 +404,10 @@ fun readImageInfo(uri: Uri): ImageInfo? {
 fun compressImageToTarget(uri: Uri, width: Int, height: Int, targetKb: Int, initialQuality: Int): CompressResult? {
     val context = AppContextHolder.currentContext
     return try {
-        // ✅ FIX 2: Explicit variable name added (inputStream)
-        val bytes = context.contentResolver.openInputStream(uri)?.use { inputStream -> inputStream.readBytes() } ?: return null
+        val bytes = context.contentResolver.openInputStream(uri)?.use { inputStream: InputStream -> 
+            inputStream.readBytes() 
+        }
+        if (bytes == null) return null
         var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
         
         bitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
@@ -449,8 +443,7 @@ fun saveImageToGallery(bytes: ByteArray): Boolean {
         
         val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
         if (uri != null) {
-            // ✅ FIX 3: Explicit 'outputStream' name added so compiler knows where 'write' comes from
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+            context.contentResolver.openOutputStream(uri)?.use { outputStream: OutputStream ->
                 outputStream.write(bytes)
             }
             true
