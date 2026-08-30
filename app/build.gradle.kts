@@ -60,7 +60,6 @@ dependencies {
     )
 
     implementation(composeBom)
-
     androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
@@ -72,9 +71,9 @@ dependencies {
 
     implementation("androidx.compose.material3:material3")
 
+    // डुप्लीकेट हटा दिया गया है, सिर्फ BOM द्वारा मैनेज की गई यह एक लाइन पर्याप्त है
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.4")
-    implementation("androidx.compose.material:material-icons-extended:1.6.0")
 
     debugImplementation(
         "androidx.compose.ui:ui-tooling"
