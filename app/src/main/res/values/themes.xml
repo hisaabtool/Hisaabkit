@@ -1,12 +1,20 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
+package com.hisaabkit.app
 
-    <style name="Theme.HisaabKit" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#FFFFFF</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
-        <item name="android:windowActionModeOverlay">true</item>
-    </style>
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material3.Text
+import com.hisaabkit.app.ui.theme.HisaabKitTheme
 
-</resources>
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        setContent {
+            HisaabKitTheme {
+                Text("HisaabKit Test")
+            }
+        }
+    }
+}
