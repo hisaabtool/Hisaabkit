@@ -31,8 +31,8 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
-// ✅ FIX 1: AppContextHolder ka import add kar diya gaya hai
-import com.hisaabkit.app.utils.AppContextHolder // Agar package alag ho, toh 'utils' ko sahi folder se replace karein
+// ✅ FIX 1: AppContextHolder import
+import com.hisaabkit.app.utils.AppContextHolder
 
 private val PhotoPurple = Color(0xFF7C3AED)
 private val PhotoBlue = Color(0xFF2563EB)
@@ -387,7 +387,7 @@ fun formatSize(kb: Int): String {
     return if (kb >= 1024) String.format("%.2f MB", kb / 1024f) else "$kb KB"
 }
 
-// ---------------- BACKEND LOGIC (ERRORS FIXED HERE) ---------------- //
+// ---------------- BACKEND LOGIC (ALL ERRORS FIXED HERE) ---------------- //
 
 data class ImageInfo(val width: Int, val height: Int, val sizeKb: Int)
 data class CompressResult(val bytes: ByteArray, val width: Int, val height: Int, val sizeKb: Int)
@@ -395,12 +395,11 @@ data class CompressResult(val bytes: ByteArray, val width: Int, val height: Int,
 fun readImageInfo(uri: Uri): ImageInfo? {
     val context = AppContextHolder.currentContext
     return try {
-        // ✅ FIX 2: openInputStream use karke readBytes() bulaya gaya hai
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        // ✅ FIX 2: Explicit variable name added (inputStream)
+        val bytes = context.contentResolver.openInputStream(uri)?.use { inputStream -> inputStream.readBytes() }
         if (bytes != null) {
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) {
-                // ✅ FIX 3: .size ko proper property ki tarah divide kiya gaya hai bina parentheses() ke
                 val sizeKb = bytes.size / 1024
                 ImageInfo(bitmap.width, bitmap.height, sizeKb)
             } else null
@@ -413,7 +412,8 @@ fun readImageInfo(uri: Uri): ImageInfo? {
 fun compressImageToTarget(uri: Uri, width: Int, height: Int, targetKb: Int, initialQuality: Int): CompressResult? {
     val context = AppContextHolder.currentContext
     return try {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        // ✅ FIX 2: Explicit variable name added (inputStream)
+        val bytes = context.contentResolver.openInputStream(uri)?.use { inputStream -> inputStream.readBytes() } ?: return null
         var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
         
         bitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
@@ -449,8 +449,9 @@ fun saveImageToGallery(bytes: ByteArray): Boolean {
         
         val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
         if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.use {
-                it.write(bytes)
+            // ✅ FIX 3: Explicit 'outputStream' name added so compiler knows where 'write' comes from
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(bytes)
             }
             true
         } else {
