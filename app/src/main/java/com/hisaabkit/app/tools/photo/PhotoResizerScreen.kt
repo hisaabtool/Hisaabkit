@@ -1,7 +1,6 @@
 package com.hisaabkit.app.tools.photo
 
 import android.content.ContentValues
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -26,13 +25,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,7 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,9 +58,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val PhotoPurple = Color(0xFF7C3AED)
@@ -74,45 +76,81 @@ private val SoftPurple = Color(0xFFF3EDFF)
 private val SoftBlue = Color(0xFFECF3FF)
 private val SoftGreen = Color(0xFFEAF8F1)
 private val SoftOrange = Color(0xFFFFF5E3)
+private val SoftRed = Color(0xFFFFEEEE)
 
 @Composable
 fun PhotoResizerScreen() {
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    var imageUri by remember {
+        mutableStateOf<Uri?>(null)
+    }
+
+    var targetWidth by remember {
+        mutableIntStateOf(800)
+    }
+
+    var targetHeight by remember {
+        mutableIntStateOf(800)
+    }
+
+    var targetSizeKb by remember {
+        mutableStateOf("50")
+    }
+
+    var originalWidth by remember {
+        mutableIntStateOf(0)
+    }
+
+    var originalHeight by remember {
+        mutableIntStateOf(0)
+    }
+
+    var originalSizeKb by remember {
+        mutableIntStateOf(0)
+    }
+
+    var outputWidth by remember {
+        mutableIntStateOf(0)
+    }
+
+    var outputHeight by remember {
+        mutableIntStateOf(0)
+    }
+
+    var outputSizeKb by remember {
+        mutableIntStateOf(0)
+    }
+
+    var outputBytes by remember {
+        mutableStateOf<ByteArray?>(null)
+    }
+
+    var quality by remember {
+        mutableIntStateOf(85)
+    }
+
+    var isProcessing by remember {
+        mutableStateOf(false)
+    }
+
+    var message by remember {
+        mutableStateOf("")
+    }
+
+    var success by remember {
+        mutableStateOf(false)
+    }
+
     val scope = rememberCoroutineScope()
-
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-
-    var targetWidth by remember { mutableIntStateOf(800) }
-    var targetHeight by remember { mutableIntStateOf(800) }
-
-    var targetSizeText by remember { mutableStateOf("50") }
-
-    var originalWidth by remember { mutableIntStateOf(0) }
-    var originalHeight by remember { mutableIntStateOf(0) }
-    var originalSizeKb by remember { mutableIntStateOf(0) }
-
-    var outputWidth by remember { mutableIntStateOf(0) }
-    var outputHeight by remember { mutableIntStateOf(0) }
-    var outputSizeKb by remember { mutableIntStateOf(0) }
-
-    var outputBytes by remember { mutableStateOf<ByteArray?>(null) }
-
-    var quality by remember { mutableIntStateOf(85) }
-
-    var keepRatio by remember { mutableStateOf(true) }
-
-    var isProcessing by remember { mutableStateOf(false) }
-
-    var message by remember { mutableStateOf("") }
-    var success by remember { mutableStateOf(false) }
 
     val imagePicker =
         rememberLauncherForActivityResult(
-            ActivityResultContracts.GetContent()
+            contract = ActivityResultContracts.GetContent()
         ) { uri ->
 
-            if (uri == null) return@rememberLauncherForActivityResult
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
 
             imageUri = uri
             outputBytes = null
@@ -125,7 +163,7 @@ fun PhotoResizerScreen() {
             scope.launch {
 
                 val info = withContext(Dispatchers.IO) {
-                    readImageInfo(context, uri)
+                    readImageInfo(uri)
                 }
 
                 if (info != null) {
@@ -134,46 +172,30 @@ fun PhotoResizerScreen() {
                     originalHeight = info.height
                     originalSizeKb = info.sizeKb
 
-                    val maxDimension = 1200
+                    val ratio =
+                        info.width.toFloat() /
+                                info.height.toFloat()
 
                     if (info.width >= info.height) {
 
                         targetWidth =
-                            minOf(info.width, maxDimension)
+                            minOf(info.width, 1200)
 
                         targetHeight =
-                            if (info.width > 0) {
-                                (
-                                    info.height.toFloat() *
-                                        targetWidth.toFloat() /
-                                        info.width.toFloat()
-                                    ).roundToInt()
-                            } else {
-                                info.height
-                            }
+                            (targetWidth / ratio)
+                                .roundToInt()
+                                .coerceAtLeast(1)
 
                     } else {
 
                         targetHeight =
-                            minOf(info.height, maxDimension)
+                            minOf(info.height, 1200)
 
                         targetWidth =
-                            if (info.height > 0) {
-                                (
-                                    info.width.toFloat() *
-                                        targetHeight.toFloat() /
-                                        info.height.toFloat()
-                                    ).roundToInt()
-                            } else {
-                                info.width
-                            }
+                            (targetHeight * ratio)
+                                .roundToInt()
+                                .coerceAtLeast(1)
                     }
-
-                    targetWidth =
-                        targetWidth.coerceAtLeast(50)
-
-                    targetHeight =
-                        targetHeight.coerceAtLeast(50)
                 }
             }
         }
@@ -184,8 +206,7 @@ fun PhotoResizerScreen() {
 
         targetWidth = 800
         targetHeight = 800
-
-        targetSizeText = "50"
+        targetSizeKb = "50"
 
         originalWidth = 0
         originalHeight = 0
@@ -198,7 +219,6 @@ fun PhotoResizerScreen() {
         outputBytes = null
 
         quality = 85
-        keepRatio = true
 
         isProcessing = false
         message = ""
@@ -210,35 +230,23 @@ fun PhotoResizerScreen() {
         val uri = imageUri
 
         if (uri == null) {
-
-            message = "पहले कोई photo select करें।"
+            message = "पहले photo select करें।"
             success = false
-
             return
         }
 
-        val targetKb =
-            targetSizeText
-                .trim()
-                .toIntOrNull()
+        val sizeKb =
+            targetSizeKb.toIntOrNull()
 
-        if (targetKb == null || targetKb < 5) {
-
-            message =
-                "Target size कम से कम 5 KB रखें।"
-
+        if (sizeKb == null || sizeKb < 1) {
+            message = "Target size सही दर्ज करें।"
             success = false
-
             return
         }
 
         if (targetWidth < 50 || targetHeight < 50) {
-
-            message =
-                "Width और Height कम से कम 50 px रखें।"
-
+            message = "Width और Height कम से कम 50 px रखें।"
             success = false
-
             return
         }
 
@@ -253,15 +261,11 @@ fun PhotoResizerScreen() {
                 withContext(Dispatchers.IO) {
 
                     compressImageToTarget(
-                        context = context,
                         uri = uri,
-                        requestedWidth = targetWidth,
-                        requestedHeight = targetHeight,
-                        targetKb = targetKb,
-                        initialQuality = quality,
-                        keepAspectRatio = keepRatio,
-                        originalWidth = originalWidth,
-                        originalHeight = originalHeight
+                        width = targetWidth,
+                        height = targetHeight,
+                        targetKb = sizeKb,
+                        initialQuality = quality
                     )
                 }
 
@@ -270,28 +274,54 @@ fun PhotoResizerScreen() {
             if (result != null) {
 
                 outputBytes = result.bytes
-
+                outputSizeKb = result.sizeKb
                 outputWidth = result.width
                 outputHeight = result.height
-
-                outputSizeKb =
-                    bytesToKb(result.bytes.size)
 
                 success = true
 
                 message =
-                    if (result.bytes.size <= targetKb * 1024) {
-                        "Photo तैयार है और target size के अंदर है।"
+                    if (result.sizeKb <= sizeKb) {
+                        "Photo successfully तैयार हो गई।"
                     } else {
-                        "Photo तैयार है। बेहतर quality के लिए size target से थोड़ा ऊपर हो सकता है।"
+                        "Photo तैयार है, लेकिन target size से थोड़ी बड़ी है।"
                     }
 
             } else {
 
+                outputBytes = null
                 success = false
-
                 message =
                     "Photo process नहीं हो सकी। दूसरी image try करें।"
+            }
+        }
+    }
+
+    fun saveImage() {
+
+        val bytes = outputBytes
+
+        if (bytes == null) {
+            message = "पहले photo को Resize & Compress करें।"
+            success = false
+            return
+        }
+
+        scope.launch {
+
+            val saved =
+                withContext(Dispatchers.IO) {
+                    saveImageToGallery(bytes)
+                }
+
+            if (saved) {
+                message =
+                    "Photo Gallery में successfully save हो गई।"
+                success = true
+            } else {
+                message =
+                    "Photo save नहीं हो सकी।"
+                success = false
             }
         }
     }
@@ -306,14 +336,12 @@ fun PhotoResizerScreen() {
                 rememberScrollState()
             )
             .padding(
-                horizontal = 16.dp,
+                horizontal = 18.dp,
                 vertical = 16.dp
             )
     ) {
 
-        // ------------------------------------------------
         // HEADER
-        // ------------------------------------------------
 
         Box(
             modifier = Modifier
@@ -339,7 +367,7 @@ fun PhotoResizerScreen() {
 
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(58.dp)
                             .background(
                                 Color.White.copy(
                                     alpha = 0.18f
@@ -352,11 +380,12 @@ fun PhotoResizerScreen() {
 
                         Icon(
                             imageVector =
-                                Icons.Default.PhotoSizeSelectLarge,
-                            contentDescription = null,
+                                Icons.Default.Image,
+                            contentDescription =
+                                null,
                             tint = Color.White,
                             modifier =
-                                Modifier.size(31.dp)
+                                Modifier.size(32.dp)
                         )
                     }
 
@@ -374,6 +403,10 @@ fun PhotoResizerScreen() {
                                 FontWeight.ExtraBold
                         )
 
+                        Spacer(
+                            Modifier.height(3.dp)
+                        )
+
                         Text(
                             text =
                                 "Resize • Compress • Save",
@@ -387,26 +420,25 @@ fun PhotoResizerScreen() {
                 }
 
                 Spacer(
-                    Modifier.height(17.dp)
+                    Modifier.height(18.dp)
                 )
 
                 Text(
                     text =
-                        "Form upload के लिए photo को सही size में तैयार करें ✨",
+                        "20KB, 50KB और custom size photo आसानी से बनाएं ✨",
                     color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 16.sp,
+                    fontWeight =
+                        FontWeight.Bold
                 )
             }
         }
 
         Spacer(
-            Modifier.height(20.dp)
+            Modifier.height(22.dp)
         )
 
-        // ------------------------------------------------
         // SELECT PHOTO
-        // ------------------------------------------------
 
         SectionTitle(
             title = "1. Photo Select करें"
@@ -423,20 +455,23 @@ fun PhotoResizerScreen() {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            shape = RoundedCornerShape(18.dp),
+            shape =
+                RoundedCornerShape(18.dp),
             colors =
                 ButtonDefaults.buttonColors(
-                    containerColor = PhotoPurple
+                    containerColor =
+                        PhotoPurple
                 )
         ) {
 
             Icon(
-                imageVector = Icons.Default.Image,
+                imageVector =
+                    Icons.Default.Image,
                 contentDescription = null
             )
 
             Spacer(
-                Modifier.width(8.dp)
+                Modifier.width(9.dp)
             )
 
             Text(
@@ -446,18 +481,15 @@ fun PhotoResizerScreen() {
                     else
                         "Change Photo",
                 fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight =
+                    FontWeight.Bold
             )
         }
-
-        // ------------------------------------------------
-        // ORIGINAL INFO
-        // ------------------------------------------------
 
         if (imageUri != null) {
 
             Spacer(
-                Modifier.height(15.dp)
+                Modifier.height(16.dp)
             )
 
             InfoCard(
@@ -473,77 +505,48 @@ fun PhotoResizerScreen() {
 
                 InfoRow(
                     "File Size",
-                    formatKb(originalSizeKb)
+                    formatSize(originalSizeKb)
                 )
 
                 InfoRow(
                     "Format",
-                    "Image"
+                    "Selected image"
                 )
             }
 
             Spacer(
-                Modifier.height(20.dp)
+                Modifier.height(22.dp)
             )
 
-            // ------------------------------------------------
             // SETTINGS
-            // ------------------------------------------------
 
             SectionTitle(
-                title = "2. Resize & Compress"
+                title = "2. Resize Settings"
             )
 
             Spacer(
                 Modifier.height(10.dp)
             )
 
-            // WIDTH
-
             OutlinedTextField(
                 value =
                     targetWidth.toString(),
-
                 onValueChange = { value ->
 
-                    val number =
-                        value.toIntOrNull()
-
-                    if (number != null) {
-
+                    value.toIntOrNull()?.let {
                         targetWidth =
-                            number.coerceIn(
+                            it.coerceIn(
                                 50,
                                 4000
                             )
-
-                        if (keepRatio &&
-                            originalWidth > 0 &&
-                            originalHeight > 0
-                        ) {
-
-                            targetHeight =
-                                (
-                                    originalHeight.toFloat() *
-                                        targetWidth.toFloat() /
-                                        originalWidth.toFloat()
-                                    ).roundToInt()
-                                    .coerceIn(
-                                        50,
-                                        4000
-                                    )
-                        }
                     }
-                },
 
+                },
                 modifier =
                     Modifier.fillMaxWidth(),
-
                 singleLine = true,
-
                 shape =
                     RoundedCornerShape(16.dp),
-
                 label = {
                     Text("Width (px)")
                 }
@@ -553,52 +556,25 @@ fun PhotoResizerScreen() {
                 Modifier.height(10.dp)
             )
 
-            // HEIGHT
-
             OutlinedTextField(
                 value =
                     targetHeight.toString(),
-
                 onValueChange = { value ->
 
-                    val number =
-                        value.toIntOrNull()
-
-                    if (number != null) {
-
+                    value.toIntOrNull()?.let {
                         targetHeight =
-                            number.coerceIn(
+                            it.coerceIn(
                                 50,
                                 4000
                             )
-
-                        if (keepRatio &&
-                            originalWidth > 0 &&
-                            originalHeight > 0
-                        ) {
-
-                            targetWidth =
-                                (
-                                    originalWidth.toFloat() *
-                                        targetHeight.toFloat() /
-                                        originalHeight.toFloat()
-                                    ).roundToInt()
-                                    .coerceIn(
-                                        50,
-                                        4000
-                                    )
-                        }
                     }
-                },
 
+                },
                 modifier =
                     Modifier.fillMaxWidth(),
-
                 singleLine = true,
-
                 shape =
                     RoundedCornerShape(16.dp),
-
                 label = {
                     Text("Height (px)")
                 }
@@ -608,13 +584,36 @@ fun PhotoResizerScreen() {
                 Modifier.height(10.dp)
             )
 
-            // ASPECT RATIO
+            OutlinedTextField(
+                value = targetSizeKb,
+                onValueChange = {
+                    targetSizeKb =
+                        it.filter { char ->
+                            char.isDigit()
+                        }.take(5)
+                },
+                modifier =
+                    Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape =
+                    RoundedCornerShape(16.dp),
+                label = {
+                    Text("Target File Size (KB)")
+                },
+                placeholder = {
+                    Text("जैसे 20, 50 या 100")
+                }
+            )
+
+            Spacer(
+                Modifier.height(18.dp)
+            )
 
             Card(
                 modifier =
                     Modifier.fillMaxWidth(),
                 shape =
-                    RoundedCornerShape(18.dp),
+                    RoundedCornerShape(20.dp),
                 colors =
                     CardDefaults.cardColors(
                         containerColor =
@@ -622,165 +621,56 @@ fun PhotoResizerScreen() {
                     )
             ) {
 
-                Row(
+                Column(
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                horizontal = 15.dp,
-                                vertical = 11.dp
-                            ),
-                    verticalAlignment =
-                        Alignment.CenterVertically
+                        Modifier.padding(16.dp)
                 ) {
 
-                    Icon(
-                        imageVector =
-                            Icons.Default.SwapHoriz,
-                        contentDescription =
-                            null,
-                        tint =
-                            PhotoPurple
+                    Text(
+                        text =
+                            "JPEG Quality: $quality%",
+                        fontSize = 15.sp,
+                        fontWeight =
+                            FontWeight.Bold
                     )
 
-                    Spacer(
-                        Modifier.width(10.dp)
+                    Slider(
+                        value =
+                            quality.toFloat(),
+                        onValueChange = {
+                            quality =
+                                it.roundToInt()
+                        },
+                        valueRange =
+                            30f..100f,
+                        steps = 69
                     )
 
-                    Column(
-                        modifier =
-                            Modifier.weight(1f)
-                    ) {
-
-                        Text(
-                            text =
-                                "Maintain Aspect Ratio",
-                            fontWeight =
-                                FontWeight.Bold
-                        )
-
-                        Text(
-                            text =
-                                "Photo को stretch होने से बचाएं",
-                            fontSize = 12.sp,
-                            color =
-                                MaterialTheme
-                                    .colorScheme
-                                    .onSurfaceVariant
-                        )
-                    }
-
-                    Switch(
-                        checked = keepRatio,
-                        onCheckedChange = {
-                            keepRatio = it
-                        }
+                    Text(
+                        text =
+                            "High quality = बेहतर clarity\nLow quality = छोटा file size",
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp
                     )
                 }
             }
 
             Spacer(
-                Modifier.height(10.dp)
-            )
-
-            // TARGET SIZE
-
-            OutlinedTextField(
-                value =
-                    targetSizeText,
-
-                onValueChange = {
-                    targetSizeText =
-                        it.filter { char ->
-                            char.isDigit()
-                        }
-                },
-
-                modifier =
-                    Modifier.fillMaxWidth(),
-
-                singleLine = true,
-
-                shape =
-                    RoundedCornerShape(16.dp),
-
-                label = {
-                    Text("Target File Size (KB)")
-                },
-
-                placeholder = {
-                    Text("जैसे 20, 50 या 100")
-                },
-
-                supportingText = {
-                    Text(
-                        "Example: 50 KB"
-                    )
-                }
-            )
-
-            Spacer(
                 Modifier.height(16.dp)
             )
-
-            // QUALITY
-
-            Text(
-                text =
-                    "Starting JPEG Quality: $quality%",
-                fontSize = 15.sp,
-                fontWeight =
-                    FontWeight.Bold
-            )
-
-            Slider(
-                value =
-                    quality.toFloat(),
-
-                onValueChange = {
-                    quality =
-                        it.roundToInt()
-                },
-
-                valueRange =
-                    40f..100f,
-
-                steps = 59
-            )
-
-            Text(
-                text =
-                    "Tool target size पाने के लिए quality और dimensions दोनों को automatically adjust करता है।",
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurfaceVariant
-            )
-
-            Spacer(
-                Modifier.height(17.dp)
-            )
-
-            // PROCESS
 
             Button(
                 onClick = {
                     processImage()
                 },
-
                 enabled =
                     !isProcessing,
-
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(58.dp),
-
                 shape =
                     RoundedCornerShape(18.dp),
-
                 colors =
                     ButtonDefaults.buttonColors(
                         containerColor =
@@ -798,7 +688,7 @@ fun PhotoResizerScreen() {
                     )
 
                     Spacer(
-                        Modifier.width(10.dp)
+                        Modifier.width(9.dp)
                     )
 
                     Text(
@@ -815,12 +705,11 @@ fun PhotoResizerScreen() {
                     )
 
                     Spacer(
-                        Modifier.width(8.dp)
+                        Modifier.width(9.dp)
                     )
 
                     Text(
-                        text =
-                            "Resize & Compress",
+                        "Resize & Compress",
                         fontSize = 16.sp,
                         fontWeight =
                             FontWeight.Bold
@@ -836,12 +725,10 @@ fun PhotoResizerScreen() {
                 onClick = {
                     reset()
                 },
-
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(50.dp),
-
                 shape =
                     RoundedCornerShape(16.dp)
             ) {
@@ -858,16 +745,14 @@ fun PhotoResizerScreen() {
                 )
 
                 Text(
-                    text = "Reset",
+                    "Reset",
                     fontWeight =
                         FontWeight.Bold
                 )
             }
         }
 
-        // ------------------------------------------------
         // MESSAGE
-        // ------------------------------------------------
 
         if (message.isNotEmpty()) {
 
@@ -878,24 +763,21 @@ fun PhotoResizerScreen() {
             Card(
                 modifier =
                     Modifier.fillMaxWidth(),
-
                 shape =
                     RoundedCornerShape(18.dp),
-
                 colors =
                     CardDefaults.cardColors(
                         containerColor =
                             if (success)
                                 SoftGreen
                             else
-                                SoftOrange
+                                SoftRed
                     )
             ) {
 
                 Row(
                     modifier =
                         Modifier.padding(16.dp),
-
                     verticalAlignment =
                         Alignment.CenterVertically
                 ) {
@@ -905,16 +787,14 @@ fun PhotoResizerScreen() {
                             if (success)
                                 Icons.Default.CheckCircle
                             else
-                                Icons.Default.Info,
-
+                                Icons.Default.Close,
                         contentDescription =
                             null,
-
                         tint =
                             if (success)
                                 PhotoGreen
                             else
-                                PhotoOrange
+                                PhotoRed
                     )
 
                     Spacer(
@@ -930,178 +810,111 @@ fun PhotoResizerScreen() {
             }
         }
 
-        // ------------------------------------------------
         // RESULT
-        // ------------------------------------------------
 
         if (outputBytes != null) {
 
             Spacer(
-                Modifier.height(20.dp)
+                Modifier.height(22.dp)
             )
 
-            Card(
-                modifier =
-                    Modifier.fillMaxWidth(),
-
-                shape =
-                    RoundedCornerShape(24.dp),
-
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor =
-                            SoftGreen
-                    )
+            InfoCard(
+                title = "3. Output Ready",
+                icon =
+                    Icons.Default.CheckCircle,
+                background =
+                    SoftGreen
             ) {
 
-                Column(
-                    modifier =
-                        Modifier.padding(20.dp)
+                InfoRow(
+                    "Dimensions",
+                    "$outputWidth × $outputHeight px"
+                )
+
+                InfoRow(
+                    "Output Size",
+                    formatSize(outputSizeKb)
+                )
+
+                val target =
+                    targetSizeKb.toIntOrNull() ?: 0
+
+                InfoRow(
+                    "Target Size",
+                    "$target KB"
+                )
+
+                if (
+                    originalSizeKb > 0 &&
+                    outputSizeKb > 0
                 ) {
 
-                    Row(
-                        verticalAlignment =
-                            Alignment.CenterVertically
-                    ) {
-
-                        Icon(
-                            imageVector =
-                                Icons.Default.CheckCircle,
-                            contentDescription =
-                                null,
-                            tint =
-                                PhotoGreen,
-                            modifier =
-                                Modifier.size(27.dp)
-                        )
-
-                        Spacer(
-                            Modifier.width(9.dp)
-                        )
-
-                        Text(
-                            text =
-                                "Photo Ready",
-                            color =
-                                PhotoGreen,
-                            fontSize = 20.sp,
-                            fontWeight =
-                                FontWeight.ExtraBold
-                        )
-                    }
-
-                    Spacer(
-                        Modifier.height(13.dp)
-                    )
-
-                    InfoRow(
-                        "Output Dimensions",
-                        "$outputWidth × $outputHeight px"
-                    )
-
-                    InfoRow(
-                        "Output Size",
-                        formatKb(outputSizeKb)
-                    )
-
-                    val target =
-                        targetSizeText
-                            .toIntOrNull()
-                            ?: 0
-
-                    InfoRow(
-                        "Target Size",
-                        "$target KB"
-                    )
-
-                    Spacer(
-                        Modifier.height(15.dp)
-                    )
-
-                    Button(
-                        onClick = {
-
-                            val bytes =
-                                outputBytes
-
-                            if (bytes == null) {
-                                return@Button
-                            }
-
-                            scope.launch {
-
-                                val saved =
-                                    withContext(
-                                        Dispatchers.IO
-                                    ) {
-                                        saveImageToGallery(
-                                            context,
-                                            bytes
-                                        )
-                                    }
-
-                                if (saved) {
-
-                                    message =
-                                        "Photo Gallery में successfully save हो गई।"
-
-                                    success = true
-
-                                } else {
-
-                                    message =
-                                        "Photo save नहीं हो सकी।"
-
-                                    success = false
-                                }
-                            }
-                        },
-
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(54.dp),
-
-                        shape =
-                            RoundedCornerShape(17.dp),
-
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor =
-                                    PhotoBlue
+                    val reduction =
+                        (
+                            100f -
+                                (
+                                    outputSizeKb.toFloat() /
+                                        originalSizeKb.toFloat()
+                                ) * 100f
                             )
-                    ) {
+                            .coerceAtLeast(0f)
 
-                        Icon(
-                            imageVector =
-                                Icons.Default.Download,
-                            contentDescription =
-                                null
+                    InfoRow(
+                        "Size Reduced",
+                        String.format(
+                            Locale.US,
+                            "%.1f%%",
+                            reduction
                         )
+                    )
+                }
 
-                        Spacer(
-                            Modifier.width(8.dp)
-                        )
+                Spacer(
+                    Modifier.height(14.dp)
+                )
 
-                        Text(
-                            text =
-                                "Save to Gallery",
-                            fontSize = 16.sp,
-                            fontWeight =
-                                FontWeight.Bold
+                Button(
+                    onClick = {
+                        saveImage()
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                    shape =
+                        RoundedCornerShape(17.dp),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor =
+                                PhotoBlue
                         )
-                    }
+                ) {
+
+                    Icon(
+                        imageVector =
+                            Icons.Default.Download,
+                        contentDescription =
+                            null
+                    )
+
+                    Spacer(
+                        Modifier.width(8.dp)
+                    )
+
+                    Text(
+                        "Save / Download",
+                        fontWeight =
+                            FontWeight.Bold
+                    )
                 }
             }
         }
 
         Spacer(
-            Modifier.height(22.dp)
+            Modifier.height(24.dp)
         )
 
-        // ------------------------------------------------
         // HOW IT WORKS
-        // ------------------------------------------------
 
         InfoCard(
             title =
@@ -1114,38 +927,51 @@ fun PhotoResizerScreen() {
 
             Text(
                 text =
-                    "यह tool पहले आपकी photo के original dimensions और file size को पढ़ता है। इसके बाद चुनी गई width और height के अनुसार image को resize किया जाता है।",
+                    "यह tool सबसे पहले आपकी selected photo को read करता है। फिर आपकी दी गई Width और Height के अनुसार image को resize किया जाता है। इसके बाद JPEG compression के जरिए file size कम करने की कोशिश की जाती है।",
                 fontSize = 14.sp,
                 lineHeight = 22.sp
             )
 
             Spacer(
-                Modifier.height(9.dp)
+                Modifier.height(10.dp)
             )
 
             Text(
                 text =
-                    "इसके बाद JPEG compression की मदद से file size कम किया जाता है। Target KB पाने के लिए tool quality और जरूरत पड़ने पर dimensions को adjust करता है।",
+                    "20KB या 50KB जैसी limit वाले online forms के लिए यह उपयोगी है। अलग-अलग websites पर required dimensions और file size अलग हो सकते हैं।",
                 fontSize = 14.sp,
                 lineHeight = 22.sp
             )
         }
 
         Spacer(
-            Modifier.height(13.dp)
+            Modifier.height(14.dp)
         )
+
+        // FORMULA
 
         InfoCard(
             title =
-                "File Size किन चीजों पर निर्भर करता है?",
+                "File Size किस formula से तय होता है?",
             icon =
-                Icons.Default.PhotoSizeSelectLarge,
+                Icons.Default.Calculate,
             background =
                 SoftPurple
         ) {
 
+            Text(
+                text =
+                    "Photo file size किसी एक fixed formula से निर्धारित नहीं होता। यह मुख्य रूप से इन factors पर निर्भर करता है:",
+                fontSize = 14.sp,
+                lineHeight = 22.sp
+            )
+
+            Spacer(
+                Modifier.height(8.dp)
+            )
+
             Bullet(
-                "Image की width और height"
+                "Width × Height यानी total pixels"
             )
 
             Bullet(
@@ -1157,115 +983,113 @@ fun PhotoResizerScreen() {
             )
 
             Bullet(
-                "Image का original format"
+                "Image format जैसे JPEG या PNG"
             )
         }
 
         Spacer(
-            Modifier.height(13.dp)
+            Modifier.height(14.dp)
         )
+
+        // TIPS
 
         InfoCard(
             title =
-                "20KB / 50KB Photo बनाने का तरीका",
+                "20KB / 50KB Photo Tips",
             icon =
-                Icons.Default.Compress,
+                Icons.Default.PhotoSizeSelectLarge,
             background =
                 SoftOrange
         ) {
 
             Bullet(
-                "पहले Photo select करें।"
+                "पहले required dimensions देखें।"
             )
 
             Bullet(
-                "Target File Size में 20 या 50 डालें।"
+                "Target size में 20 या 50 KB डालें।"
             )
 
             Bullet(
-                "जरूरत के अनुसार dimensions रखें।"
+                "जरूरत पड़ने पर JPEG quality कम करें।"
             )
 
             Bullet(
-                "Maintain Aspect Ratio ON रखने की सलाह है।"
+                "बहुत ज्यादा compression से image blurry हो सकती है।"
             )
 
             Bullet(
-                "Resize & Compress दबाएं।"
-            )
-
-            Bullet(
-                "Result मिलने के बाद Save to Gallery दबाएं।"
+                "Form upload करने से पहले final photo जरूर check करें।"
             )
         }
 
         Spacer(
-            Modifier.height(13.dp)
+            Modifier.height(14.dp)
         )
+
+        // PRIVACY
 
         InfoCard(
             title =
-                "Privacy",
+                "Privacy & Safety",
             icon =
-                Icons.Default.CheckCircle,
+                Icons.Default.Info,
             background =
                 SoftGreen
         ) {
 
             Text(
                 text =
-                    "Image processing device पर होती है। Photo को किसी online server पर upload करने की आवश्यकता नहीं है।",
+                    "इस implementation में image processing device पर की जाती है। Photo को resize करने के लिए किसी online server पर भेजने की आवश्यकता नहीं है।",
                 fontSize = 14.sp,
                 lineHeight = 22.sp
             )
         }
 
         Spacer(
-            Modifier.height(20.dp)
+            Modifier.height(24.dp)
         )
 
-        SectionTitle(
-            title =
-                "Frequently Asked Questions"
+        Text(
+            text =
+                "Frequently Asked Questions",
+            fontSize = 21.sp,
+            fontWeight =
+                FontWeight.ExtraBold
         )
 
         Spacer(
-            Modifier.height(7.dp)
+            Modifier.height(8.dp)
         )
 
         FaqCard(
             "20KB photo कैसे बनाएं?",
-            "Photo select करें, Target File Size में 20 KB डालें और Resize & Compress दबाएं।"
+            "Photo select करें, Target File Size में 20 डालें और Resize & Compress दबाएं। जरूरत के अनुसार dimensions और quality adjust करें।"
         )
 
         FaqCard(
             "50KB photo कैसे बनाएं?",
-            "Target File Size में 50 KB डालकर Resize & Compress करें। Result के बाद Save to Gallery दबाएं।"
+            "Photo select करके Target File Size में 50 डालें और Resize & Compress दबाएं।"
         )
 
         FaqCard(
-            "क्या photo की quality खराब होगी?",
-            "बहुत ज्यादा compression करने पर quality कम हो सकती है। Tool target size और image quality के बीच balance बनाने की कोशिश करता है।"
+            "क्या photo quality कम होगी?",
+            "Compression बढ़ाने पर quality कम हो सकती है। इसलिए file size और image clarity के बीच balance रखें।"
         )
 
         FaqCard(
-            "Maintain Aspect Ratio क्या है?",
-            "यह option width और height का original अनुपात बनाए रखता है, जिससे photo खिंची हुई या दबाई हुई नहीं दिखती।"
+            "Photo dimensions क्या होते हैं?",
+            "Dimensions image की width और height होती हैं, जिन्हें pixels में मापा जाता है। उदाहरण: 800 × 800 px।"
         )
 
         FaqCard(
-            "क्या photo Gallery में save होगी?",
-            "हाँ। Processing के बाद Save to Gallery button दबाने पर JPEG image device की Pictures/HisaabKit folder में save की जाती है।"
+            "क्या tool offline काम कर सकता है?",
+            "Image processing इस implementation में device पर होती है। Internet की आवश्यकता image processing के लिए नहीं है।"
         )
 
         FaqCard(
-            "क्या यह tool offline काम कर सकता है?",
-            "हाँ। Image processing device पर होती है और इसके लिए image को online server पर भेजना जरूरी नहीं है।"
-        )
-
-        FaqCard(
-            "क्या हर सरकारी form में 20KB photo चलेगी?",
-            "नहीं। अलग-अलग forms में अलग file size, dimensions और format की requirements हो सकती हैं। हमेशा संबंधित form की official requirements देखें।"
+            "क्या 50KB हर online form के लिए सही है?",
+            "नहीं। हर form की अलग-अलग photo size, dimensions और format requirements हो सकती हैं। संबंधित official instructions जरूर देखें।"
         )
 
         Spacer(
@@ -1274,9 +1098,9 @@ fun PhotoResizerScreen() {
     }
 }
 
-// ======================================================
-// DATA CLASS
-// ======================================================
+// =====================================================
+// DATA
+// =====================================================
 
 private data class ImageInfo(
     val width: Int,
@@ -1286,38 +1110,50 @@ private data class ImageInfo(
 
 private data class CompressionResult(
     val bytes: ByteArray,
+    val sizeKb: Int,
     val width: Int,
     val height: Int
 )
 
-// ======================================================
-// IMAGE INFO
-// ======================================================
+// =====================================================
+// IMAGE INFORMATION
+// =====================================================
 
 private fun readImageInfo(
-    context: Context,
     uri: Uri
 ): ImageInfo? {
 
     return try {
 
-        val input =
+        val context =
+            AppContextHolder.context
+                ?: return null
+
+        val inputStream =
             context.contentResolver
                 .openInputStream(uri)
                 ?: return null
+
+        val bytes =
+            inputStream.use {
+                it.readBytes()
+            }
+
+        if (bytes.isEmpty()) {
+            return null
+        }
 
         val options =
             BitmapFactory.Options()
 
         options.inJustDecodeBounds = true
 
-        BitmapFactory.decodeStream(
-            input,
-            null,
+        BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
             options
         )
-
-        input.close()
 
         if (
             options.outWidth <= 0 ||
@@ -1326,24 +1162,11 @@ private fun readImageInfo(
             return null
         }
 
-        val sizeBytes =
-            context.contentResolver
-                .openAssetFileDescriptor(
-                    uri,
-                    "r"
-                )
-                ?.use {
-                    it.length
-                }
-                ?: 0L
-
         ImageInfo(
             width = options.outWidth,
             height = options.outHeight,
             sizeKb =
-                bytesToKb(
-                    sizeBytes.toInt()
-                )
+                ((bytes.size + 1023) / 1024)
         )
 
     } catch (_: Exception) {
@@ -1351,233 +1174,127 @@ private fun readImageInfo(
     }
 }
 
-// ======================================================
-// SMART COMPRESSION
-// ======================================================
+// =====================================================
+// COMPRESS IMAGE
+// =====================================================
 
 private fun compressImageToTarget(
-    context: Context,
     uri: Uri,
-    requestedWidth: Int,
-    requestedHeight: Int,
+    width: Int,
+    height: Int,
     targetKb: Int,
-    initialQuality: Int,
-    keepAspectRatio: Boolean,
-    originalWidth: Int,
-    originalHeight: Int
+    initialQuality: Int
 ): CompressionResult? {
 
     return try {
 
-        val input =
+        val context =
+            AppContextHolder.context
+                ?: return null
+
+        val inputStream =
             context.contentResolver
                 .openInputStream(uri)
                 ?: return null
 
         val original =
-            BitmapFactory.decodeStream(input)
+            inputStream.use {
+                BitmapFactory.decodeStream(it)
+            }
 
-        input.close()
-
-        original ?: return null
-
-        val targetBytes =
-            targetKb.toLong() * 1024L
-
-        var width =
-            requestedWidth.coerceIn(
-                50,
-                4000
-            )
-
-        var height =
-            requestedHeight.coerceIn(
-                50,
-                4000
-            )
-
-        if (
-            keepAspectRatio &&
-            originalWidth > 0 &&
-            originalHeight > 0
-        ) {
-
-            val ratio =
-                originalWidth.toFloat() /
-                    originalHeight.toFloat()
-
-            height =
-                (
-                    width.toFloat() / ratio
-                )
-                    .roundToInt()
-                    .coerceIn(
-                        50,
-                        4000
-                    )
+        if (original == null) {
+            return null
         }
 
-        var bestBytes: ByteArray? = null
-        var bestWidth = width
-        var bestHeight = height
+        val safeWidth =
+            width.coerceIn(50, 4000)
 
-        var currentWidth = width
-        var currentHeight = height
+        val safeHeight =
+            height.coerceIn(50, 4000)
 
-        var currentQuality =
+        val resized =
+            original.scale(
+                safeWidth,
+                safeHeight
+            )
+
+        if (resized.width <= 0 || resized.height <= 0) {
+            original.recycle()
+            return null
+        }
+
+        val targetBytes =
+            targetKb.coerceIn(
+                1,
+                10240
+            ) * 1024
+
+        var quality =
             initialQuality.coerceIn(
-                40,
+                30,
                 100
             )
 
-        repeat(9) {
+        var bestBytes: ByteArray? = null
+        var bestDifference =
+            Long.MAX_VALUE
 
-            val bitmap =
-                if (
-                    original.width == currentWidth &&
-                    original.height == currentHeight
-                ) {
-                    original
-                } else {
-                    Bitmap.createScaledBitmap(
-                        original,
-                        currentWidth,
-                        currentHeight,
-                        true
-                    )
-                }
+        while (quality >= 30) {
 
-            val result =
-                compressBitmap(
-                    bitmap,
-                    currentQuality
+            val stream =
+                ByteArrayOutputStream()
+
+            resized.compress(
+                Bitmap.CompressFormat.JPEG,
+                quality,
+                stream
+            )
+
+            val bytes =
+                stream.toByteArray()
+
+            stream.close()
+
+            val difference =
+                kotlin.math.abs(
+                    bytes.size.toLong() -
+                        targetBytes.toLong()
                 )
 
-            if (bitmap !== original) {
-                bitmap.recycle()
-            }
-
-            if (bestBytes == null) {
-                bestBytes = result
-                bestWidth = currentWidth
-                bestHeight = currentHeight
-            }
-
-            if (result.size <= targetBytes) {
-
-                bestBytes = result
-                bestWidth = currentWidth
-                bestHeight = currentHeight
-
-                if (
-                    targetBytes -
-                        result.size <
-                        targetBytes / 10
-                ) {
-                    return@repeat
-                }
-
-                currentQuality =
-                    minOf(
-                        100,
-                        currentQuality + 3
-                    )
-
-            } else {
-
-                if (currentQuality > 45) {
-
-                    currentQuality -= 8
-
-                } else {
-
-                    currentWidth =
-                        (
-                            currentWidth * 0.90f
-                        )
-                            .roundToInt()
-                            .coerceAtLeast(50)
-
-                    currentHeight =
-                        (
-                            currentHeight * 0.90f
-                        )
-                            .roundToInt()
-                            .coerceAtLeast(50)
-                }
-            }
-        }
-
-        // Final smaller-size attempt if needed
-
-        if (
-            bestBytes == null ||
-            bestBytes!!.size > targetBytes
-        ) {
-
-            var finalWidth =
-                bestWidth
-
-            var finalHeight =
-                bestHeight
-
-            repeat(8) {
-
-                finalWidth =
-                    (
-                        finalWidth * 0.85f
-                    )
-                        .roundToInt()
-                        .coerceAtLeast(50)
-
-                finalHeight =
-                    (
-                        finalHeight * 0.85f
-                    )
-                        .roundToInt()
-                        .coerceAtLeast(50)
-
-                val bitmap =
-                    Bitmap.createScaledBitmap(
-                        original,
-                        finalWidth,
-                        finalHeight,
-                        true
-                    )
-
-                val bytes =
-                    compressBitmap(
-                        bitmap,
-                        45
-                    )
-
-                bitmap.recycle()
-
-                if (
-                    bytes.size <= targetBytes
-                ) {
-
-                    bestBytes = bytes
-                    bestWidth = finalWidth
-                    bestHeight = finalHeight
-
-                    break
-                }
-
+            if (difference < bestDifference) {
+                bestDifference = difference
                 bestBytes = bytes
-                bestWidth = finalWidth
-                bestHeight = finalHeight
             }
+
+            if (bytes.size <= targetBytes) {
+                bestBytes = bytes
+                break
+            }
+
+            quality -= 5
         }
 
+        val finalBytes =
+            bestBytes
+
+        resized.recycle()
         original.recycle()
 
-        bestBytes?.let {
+        if (
+            finalBytes == null ||
+            finalBytes.isEmpty()
+        ) {
+            null
+        } else {
 
             CompressionResult(
-                bytes = it,
-                width = bestWidth,
-                height = bestHeight
+                bytes = finalBytes,
+                sizeKb =
+                    (
+                        finalBytes.size + 1023
+                        ) / 1024,
+                width = safeWidth,
+                height = safeHeight
             )
         }
 
@@ -1586,46 +1303,25 @@ private fun compressImageToTarget(
     }
 }
 
-// ======================================================
-// JPEG COMPRESSION
-// ======================================================
-
-private fun compressBitmap(
-    bitmap: Bitmap,
-    quality: Int
-): ByteArray {
-
-    val stream =
-        java.io.ByteArrayOutputStream()
-
-    bitmap.compress(
-        Bitmap.CompressFormat.JPEG,
-        quality.coerceIn(
-            30,
-            100
-        ),
-        stream
-    )
-
-    return stream.toByteArray()
-}
-
-// ======================================================
+// =====================================================
 // SAVE TO GALLERY
-// ======================================================
+// =====================================================
 
 private fun saveImageToGallery(
-    context: Context,
     bytes: ByteArray
 ): Boolean {
 
     return try {
 
+        val context =
+            AppContextHolder.context
+                ?: return false
+
         val resolver =
             context.contentResolver
 
         val fileName =
-            "HisaabKit_${System.currentTimeMillis()}.jpg"
+            "HisaabKit_Photo_${System.currentTimeMillis()}.jpg"
 
         val values =
             ContentValues().apply {
@@ -1640,7 +1336,10 @@ private fun saveImageToGallery(
                     "image/jpeg"
                 )
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (
+                    Build.VERSION.SDK_INT >=
+                    Build.VERSION_CODES.Q
+                ) {
 
                     put(
                         MediaStore.Images.Media.RELATIVE_PATH,
@@ -1663,8 +1362,7 @@ private fun saveImageToGallery(
 
         try {
 
-            resolver
-                .openOutputStream(uri)
+            resolver.openOutputStream(uri)
                 ?.use { output ->
                     output.write(bytes)
                     output.flush()
@@ -1678,9 +1376,8 @@ private fun saveImageToGallery(
                 Build.VERSION_CODES.Q
             ) {
 
-                val update =
+                val updateValues =
                     ContentValues().apply {
-
                         put(
                             MediaStore.Images.Media.IS_PENDING,
                             0
@@ -1689,7 +1386,7 @@ private fun saveImageToGallery(
 
                 resolver.update(
                     uri,
-                    update,
+                    updateValues,
                     null,
                     null
                 )
@@ -1713,41 +1410,9 @@ private fun saveImageToGallery(
     }
 }
 
-// ======================================================
-// HELPERS
-// ======================================================
-
-private fun bytesToKb(
-    bytes: Int
-): Int {
-
-    return if (bytes <= 0) {
-        0
-    } else {
-        ((bytes + 1023) / 1024)
-    }
-}
-
-private fun formatKb(
-    kb: Int
-): String {
-
-    return if (kb >= 1024) {
-
-        String.format(
-            "%.2f MB",
-            kb / 1024.0
-        )
-
-    } else {
-
-        "$kb KB"
-    }
-}
-
-// ======================================================
+// =====================================================
 // SECTION TITLE
-// ======================================================
+// =====================================================
 
 @Composable
 private fun SectionTitle(
@@ -1762,9 +1427,9 @@ private fun SectionTitle(
     )
 }
 
-// ======================================================
+// =====================================================
 // INFO ROW
-// ======================================================
+// =====================================================
 
 @Composable
 private fun InfoRow(
@@ -1777,20 +1442,17 @@ private fun InfoRow(
             Modifier
                 .fillMaxWidth()
                 .padding(
-                    vertical = 4.dp
+                    vertical = 5.dp
                 ),
         horizontalArrangement =
-            Arrangement.SpaceBetween,
-        verticalAlignment =
-            Alignment.CenterVertically
+            Arrangement.SpaceBetween
     ) {
 
         Text(
             text = title,
             fontSize = 14.sp,
             color =
-                MaterialTheme
-                    .colorScheme
+                MaterialTheme.colorScheme
                     .onSurfaceVariant
         )
 
@@ -1803,9 +1465,29 @@ private fun InfoRow(
     }
 }
 
-// ======================================================
+// =====================================================
+// FORMAT SIZE
+// =====================================================
+
+private fun formatSize(
+    kb: Int
+): String {
+
+    return if (kb < 1024) {
+        "$kb KB"
+    } else {
+
+        String.format(
+            Locale.US,
+            "%.2f MB",
+            kb / 1024f
+        )
+    }
+}
+
+// =====================================================
 // INFO CARD
-// ======================================================
+// =====================================================
 
 @Composable
 private fun InfoCard(
@@ -1818,10 +1500,8 @@ private fun InfoCard(
     Card(
         modifier =
             Modifier.fillMaxWidth(),
-
         shape =
             RoundedCornerShape(22.dp),
-
         colors =
             CardDefaults.cardColors(
                 containerColor =
@@ -1845,9 +1525,11 @@ private fun InfoCard(
                             .size(38.dp)
                             .background(
                                 Color.White.copy(
-                                    alpha = 0.65f
+                                    alpha = 0.75f
                                 ),
-                                RoundedCornerShape(12.dp)
+                                RoundedCornerShape(
+                                    12.dp
+                                )
                             ),
                     contentAlignment =
                         Alignment.Center
@@ -1855,8 +1537,7 @@ private fun InfoCard(
 
                     Icon(
                         imageVector = icon,
-                        contentDescription =
-                            null,
+                        contentDescription = null,
                         tint =
                             PhotoPurple,
                         modifier =
@@ -1870,7 +1551,7 @@ private fun InfoCard(
 
                 Text(
                     text = title,
-                    fontSize = 17.sp,
+                    fontSize = 18.sp,
                     fontWeight =
                         FontWeight.ExtraBold
                 )
@@ -1885,9 +1566,9 @@ private fun InfoCard(
     }
 }
 
-// ======================================================
+// =====================================================
 // BULLET
-// ======================================================
+// =====================================================
 
 @Composable
 private fun Bullet(
@@ -1899,7 +1580,7 @@ private fun Bullet(
             Modifier
                 .fillMaxWidth()
                 .padding(
-                    vertical = 3.dp
+                    vertical = 4.dp
                 ),
         verticalAlignment =
             Alignment.Top
@@ -1926,9 +1607,9 @@ private fun Bullet(
     }
 }
 
-// ======================================================
+// =====================================================
 // FAQ
-// ======================================================
+// =====================================================
 
 @Composable
 private fun FaqCard(
@@ -1943,18 +1624,14 @@ private fun FaqCard(
                 .padding(
                     vertical = 5.dp
                 ),
-
         shape =
             RoundedCornerShape(18.dp),
-
         colors =
             CardDefaults.cardColors(
                 containerColor =
-                    MaterialTheme
-                        .colorScheme
+                    MaterialTheme.colorScheme
                         .surface
             ),
-
         elevation =
             CardDefaults.cardElevation(
                 defaultElevation = 2.dp
@@ -1982,8 +1659,7 @@ private fun FaqCard(
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
                 color =
-                    MaterialTheme
-                        .colorScheme
+                    MaterialTheme.colorScheme
                         .onSurfaceVariant
             )
         }
