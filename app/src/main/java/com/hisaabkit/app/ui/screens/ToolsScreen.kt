@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,29 +32,29 @@ fun ToolsScreen(
 
     val tools = listOf(
         Tool(
-            "EMI Calculator",
-            "Loan EMI और interest",
-            Icons.Default.Calculate
+            title = "EMI Calculator",
+            subtitle = "Loan EMI और interest",
+            icon = Icons.Default.Calculate
         ),
         Tool(
-            "Bike Loan EMI",
-            "Bike finance का हिसाब",
-            Icons.Default.AccountBalance
+            title = "Bike Loan EMI",
+            subtitle = "Bike finance का हिसाब",
+            icon = Icons.Default.AccountBalance
         ),
         Tool(
-            "EMI Prepayment",
-            "Loan जल्दी खत्म करें",
-            Icons.Default.Calculate
+            title = "EMI Prepayment",
+            subtitle = "Loan जल्दी खत्म करें",
+            icon = Icons.Default.Calculate
         ),
         Tool(
-            "Bigha / Biswa",
-            "जमीन का area निकालें",
-            Icons.Default.Home
+            title = "Bigha / Biswa",
+            subtitle = "जमीन का area निकालें",
+            icon = Icons.Default.Home
         ),
         Tool(
-            "Photo Resizer",
-            "Photo size कम करें",
-            Icons.Default.Image
+            title = "Photo Resizer",
+            subtitle = "Photo size कम करें",
+            icon = Icons.Default.Image
         )
     )
 
@@ -62,7 +64,9 @@ fun ToolsScreen(
             .padding(horizontal = 16.dp)
     ) {
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
 
         Text(
             text = "All Tools",
@@ -70,14 +74,18 @@ fun ToolsScreen(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(
+            modifier = Modifier.height(6.dp)
+        )
 
         Text(
             text = "अपने काम के हिसाब से tool चुनें",
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(
+            modifier = Modifier.height(18.dp)
+        )
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -106,42 +114,41 @@ private fun ToolCardForList(
     onClick: () -> Unit
 ) {
 
-    androidx.compose.material3.Card(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(150.dp)
-            .padding(1.dp)
-            .then(
-                Modifier
-            ),
+            .height(150.dp),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
         onClick = onClick
     ) {
 
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
 
-            androidx.compose.material3.Icon(
+            Icon(
                 imageVector = tool.icon,
                 contentDescription = null,
                 modifier = Modifier.height(40.dp)
             )
 
-            Spacer(Modifier.height(18.dp))
+            Column {
 
-            Text(
-                text = tool.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+                Text(
+                    text = tool.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
 
-            Text(
-                text = tool.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                Text(
+                    text = tool.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
