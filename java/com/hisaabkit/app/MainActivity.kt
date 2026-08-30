@@ -1,30 +1,20 @@
 package com.hisaabkit.app
 
 import android.os.Bundle
+import android.widget.TextView
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import com.hisaabkit.app.navigation.AppNavigation
-import com.hisaabkit.app.ui.theme.HisaabKitTheme
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        setContent {
+        val textView = TextView(this)
 
-            HisaabKitTheme {
+        textView.text = "HisaabKit Test"
+        textView.textSize = 24f
+        textView.setPadding(40, 80, 40, 40)
 
-                Surface(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-
-                    AppNavigation()
-                }
-            }
-        }
+        setContentView(textView)
     }
 }
