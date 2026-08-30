@@ -1,14 +1,18 @@
 package com.hisaabkit.app.tools.photo
 
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,11 +36,15 @@ fun PhotoResizerScreen() {
     var targetKb by remember { mutableStateOf("50") }
     var status by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
+    
+    // Naya variable: Compressed image ko store karne ke liye
+    var compressedBytes by remember { mutableStateOf<ByteArray?>(null) }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         selectedUri = uri
+        compressedBytes = null // Nayi photo select hone par purana result hata dein
         status = if (uri != null) "Photo selected successfully." else ""
     }
 
@@ -77,7 +85,6 @@ fun PhotoResizerScreen() {
         OutlinedTextField(
             value = targetKb,
             onValueChange = { input ->
-                // Sirf numbers allow karein
                 if (input.all { it.isDigit() }) targetKb = input
             },
             modifier = Modifier.fillMaxWidth(),
@@ -106,12 +113,13 @@ fun PhotoResizerScreen() {
 
                 isProcessing = true
                 status = ""
+                compressedBytes = null
 
-                // Background thread par process karein
                 scope.launch {
                     try {
                         val output = compressImage(context, uri, kb)
                         if (output != null) {
+                            compressedBytes = output
                             status = "Success! Photo size: ${output.size / 1024} KB"
                         } else {
                             status = "Photo process नहीं हो सकी।"
@@ -142,13 +150,42 @@ fun PhotoResizerScreen() {
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        // DOWNLOAD BUTTON (Sirf tab dikhega jab compress ho chuka ho)
+        if (compressedBytes != null) {
+            FilledTonalButton(
+                onClick = {
+                    scope.launch {
+                        isProcessing = true
+                        val saved = saveToGallery(context, compressedBytes!!)
+                        isProcessing = false
+                        status = if (saved) {
+                            "✅ Photo Gallery में Save हो गई!"
+                        } else {
+                            "❌ Photo Save करने में दिक्कत आई।"
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !isProcessing,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Save to Gallery", fontWeight = FontWeight.Bold)
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
 
         if (status.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (status.contains("Success")) 
+                    containerColor = if (status.contains("Success") || status.contains("✅")) 
                         MaterialTheme.colorScheme.primaryContainer 
                     else 
                         MaterialTheme.colorScheme.errorContainer
@@ -161,7 +198,7 @@ fun PhotoResizerScreen() {
                     Text(
                         text = status,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = if (status.contains("Success")) 
+                        color = if (status.contains("Success") || status.contains("✅")) 
                             MaterialTheme.colorScheme.onPrimaryContainer 
                         else 
                             MaterialTheme.colorScheme.onErrorContainer
@@ -172,9 +209,6 @@ fun PhotoResizerScreen() {
     }
 }
 
-/**
- * Suspend function banaya gaya hai taaki ye main thread ko block na kare.
- */
 suspend fun compressImage(
     context: Context,
     uri: Uri,
@@ -182,9 +216,6 @@ suspend fun compressImage(
 ): ByteArray? = withContext(Dispatchers.IO) {
     
     val input = context.contentResolver.openInputStream(uri) ?: return@withContext null
-    
-    // OOM bachane ke liye pehle sirf bounds decode karein (Optional advanced step for huge images)
-    // Abhi ke liye hum safe decoding ensure kar rahe hain using 'use' properly.
     val bitmap = input.use { BitmapFactory.decodeStream(it) } ?: return@withContext null
 
     var quality = 100
@@ -193,14 +224,38 @@ suspend fun compressImage(
 
     do {
         stream = ByteArrayOutputStream()
-        // Compression process
         bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
         result = stream.toByteArray()
         
-        // Agar image bohot badi hai, to tezi se quality drop karein
         quality -= if (result.size > (targetKb * 1024 * 2)) 10 else 5
 
     } while (result.size > targetKb * 1024 && quality > 5)
 
     return@withContext result
+}
+
+// Naya function: Byte array ko phone ki gallery me save karne ke liye
+suspend fun saveToGallery(context: Context, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val filename = "Compressed_${System.currentTimeMillis()}.jpg"
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Hisaabkit")
+            }
+        }
+        
+        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        if (uri != null) {
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(bytes)
+            }
+            true
+        } else {
+            false
+        }
+    } catch (e: Exception) {
+        false
+    }
 }
