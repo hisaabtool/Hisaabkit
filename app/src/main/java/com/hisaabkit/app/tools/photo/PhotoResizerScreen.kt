@@ -1,17 +1,13 @@
 package com.hisaabkit.app.tools.photo
 
-import android.content.ContentValues
-import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,643 +15,1173 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.scale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.Locale
-import kotlin.math.max
 import kotlin.math.roundToInt
+
+private val PhotoPurple = Color(0xFF7C3AED)
+private val PhotoBlue = Color(0xFF2563EB)
+private val PhotoGreen = Color(0xFF059669)
+private val PhotoOrange = Color(0xFFF59E0B)
+
+private val SoftPurple = Color(0xFFF3EDFF)
+private val SoftBlue = Color(0xFFECF3FF)
+private val SoftGreen = Color(0xFFEAF8F1)
+private val SoftOrange = Color(0xFFFFF5E3)
 
 @Composable
 fun PhotoResizerScreen() {
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
 
-    var selectedUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
+    var targetWidth by remember { mutableIntStateOf(800) }
+    var targetHeight by remember { mutableIntStateOf(800) }
 
-    var previewBitmap by remember {
-        mutableStateOf<Bitmap?>(null)
-    }
+    var targetSizeKb by remember { mutableStateOf("50") }
 
-    var compressedBytes by remember {
-        mutableStateOf<ByteArray?>(null)
-    }
+    var originalWidth by remember { mutableIntStateOf(0) }
+    var originalHeight by remember { mutableIntStateOf(0) }
+    var originalSizeKb by remember { mutableIntStateOf(0) }
 
-    var selectedSize by remember {
-        mutableIntStateOf(50)
-    }
+    var outputSizeKb by remember { mutableIntStateOf(0) }
+    var outputBytes by remember { mutableStateOf<ByteArray?>(null) }
 
-    var customSize by remember {
-        mutableStateOf("")
-    }
+    var quality by remember { mutableIntStateOf(85) }
 
-    var status by remember {
-        mutableStateOf("Photo select करें")
-    }
+    var isProcessing by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var success by remember { mutableStateOf(false) }
 
-    var savedUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
+    val scope = rememberCoroutineScope()
 
     val imagePicker =
         rememberLauncherForActivityResult(
-            ActivityResultContracts.GetContent()
+            contract = ActivityResultContracts.GetContent()
         ) { uri ->
 
             if (uri != null) {
 
-                selectedUri = uri
-                compressedBytes = null
-                savedUri = null
+                imageUri = uri
+                outputBytes = null
+                success = false
+                message = ""
 
-                previewBitmap = loadBitmap(
-                    context = context,
-                    uri = uri
-                )
+                scope.launch {
 
-                status = if (previewBitmap != null) {
-                    "Photo selected successfully"
-                } else {
-                    "Photo open नहीं हो सकी"
+                    val info = withContext(Dispatchers.IO) {
+                        readImageInfo(uri)
+                    }
+
+                    if (info != null) {
+
+                        originalWidth = info.first
+                        originalHeight = info.second
+                        originalSizeKb = info.third
+
+                        targetWidth =
+                            minOf(info.first, 1200)
+
+                        targetHeight =
+                            minOf(info.second, 1200)
+                    }
                 }
             }
         }
 
-    val targetKb =
-        if (selectedSize == 0) {
-            customSize.toIntOrNull() ?: 50
-        } else {
-            selectedSize
+    fun reset() {
+
+        imageUri = null
+
+        targetWidth = 800
+        targetHeight = 800
+
+        targetSizeKb = "50"
+
+        originalWidth = 0
+        originalHeight = 0
+        originalSizeKb = 0
+
+        outputSizeKb = 0
+        outputBytes = null
+
+        quality = 85
+
+        isProcessing = false
+        message = ""
+        success = false
+    }
+
+    fun resizeImage() {
+
+        val uri = imageUri ?: return
+        val sizeKb = targetSizeKb.toIntOrNull()
+
+        if (sizeKb == null || sizeKb <= 0) {
+            message = "कृपया सही target size दर्ज करें।"
+            success = false
+            return
         }
+
+        isProcessing = true
+        message = ""
+        success = false
+
+        scope.launch {
+
+            val result = withContext(Dispatchers.IO) {
+
+                compressImageToTarget(
+                    uri = uri,
+                    width = targetWidth,
+                    height = targetHeight,
+                    targetKb = sizeKb,
+                    initialQuality = quality
+                )
+            }
+
+            isProcessing = false
+
+            if (result != null) {
+
+                outputBytes = result
+                outputSizeKb =
+                    result.size / 1024
+
+                success = true
+
+                message =
+                    "Photo successfully resize/compress हो गई।"
+            } else {
+
+                success = false
+
+                message =
+                    "Photo process नहीं हो सकी। दूसरी image try करें।"
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .background(
+                MaterialTheme.colorScheme.background
+            )
+            .verticalScroll(
+                rememberScrollState()
+            )
+            .padding(
+                horizontal = 18.dp,
+                vertical = 16.dp
+            )
     ) {
 
+        // HEADER
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            PhotoPurple,
+                            PhotoBlue
+                        )
+                    ),
+                    RoundedCornerShape(27.dp)
+                )
+                .padding(22.dp)
+        ) {
+
+            Row(
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                Box(
+                    modifier = Modifier
+                        .background(
+                            Color.White.copy(alpha = 0.18f),
+                            RoundedCornerShape(17.dp)
+                        )
+                        .padding(14.dp)
+                ) {
+
+                    Icon(
+                        imageVector =
+                            Icons.Default.Image,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier =
+                            Modifier.size(30.dp)
+                    )
+                }
+
+                Spacer(
+                    Modifier.width(14.dp)
+                )
+
+                Column {
+
+                    Text(
+                        text = "Photo Resizer",
+                        color = Color.White,
+                        fontSize = 25.sp,
+                        fontWeight =
+                            FontWeight.ExtraBold
+                    )
+
+                    Spacer(
+                        Modifier.height(4.dp)
+                    )
+
+                    Text(
+                        text =
+                            "Photo का size और dimensions आसानी से बदलें",
+                        color =
+                            Color.White.copy(alpha = 0.88f),
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(22.dp))
+
         Text(
-            text = "Photo Resizer",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            text = "Select Photo",
+            fontSize = 21.sp,
+            fontWeight = FontWeight.ExtraBold
         )
 
-        Spacer(
-            modifier = Modifier.height(6.dp)
-        )
-
-        Text(
-            text = "Photo को अपनी जरूरत के अनुसार छोटा करें।",
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(
-            modifier = Modifier.height(20.dp)
-        )
+        Spacer(Modifier.height(12.dp))
 
         Button(
             onClick = {
                 imagePicker.launch("image/*")
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = PhotoPurple
+            )
         ) {
-            Text("📷 Select Photo")
+
+            Icon(
+                imageVector = Icons.Default.Image,
+                contentDescription = null
+            )
+
+            Spacer(Modifier.width(8.dp))
+
+            Text(
+                text =
+                    if (imageUri == null)
+                        "Choose Photo"
+                    else
+                        "Change Photo",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
-        Spacer(
-            modifier = Modifier.height(18.dp)
+        // ORIGINAL IMAGE INFO
+
+        if (imageUri != null) {
+
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier =
+                    Modifier.fillMaxWidth(),
+                shape =
+                    RoundedCornerShape(20.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor =
+                            SoftBlue
+                    )
+            ) {
+
+                Column(
+                    modifier =
+                        Modifier.padding(17.dp)
+                ) {
+
+                    Text(
+                        text =
+                            "Original Photo",
+                        fontSize = 17.sp,
+                        fontWeight =
+                            FontWeight.ExtraBold
+                    )
+
+                    Spacer(
+                        Modifier.height(9.dp)
+                    )
+
+                    InfoRow(
+                        "Dimensions",
+                        "${originalWidth} × ${originalHeight} px"
+                    )
+
+                    InfoRow(
+                        "File Size",
+                        "${originalSizeKb} KB"
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text(
+                text = "Resize Settings",
+                fontSize = 21.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value =
+                    targetWidth.toString(),
+                onValueChange = {
+                    it.toIntOrNull()?.let { number ->
+                        targetWidth = number
+                    }
+                },
+                modifier =
+                    Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape =
+                    RoundedCornerShape(16.dp),
+                label = {
+                    Text("Width (px)")
+                }
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value =
+                    targetHeight.toString(),
+                onValueChange = {
+                    it.toIntOrNull()?.let { number ->
+                        targetHeight = number
+                    }
+                },
+                modifier =
+                    Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape =
+                    RoundedCornerShape(16.dp),
+                label = {
+                    Text("Height (px)")
+                }
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = targetSizeKb,
+                onValueChange = {
+                    targetSizeKb = it
+                },
+                modifier =
+                    Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape =
+                    RoundedCornerShape(16.dp),
+                label = {
+                    Text("Target File Size (KB)")
+                },
+                placeholder = {
+                    Text("जैसे 20 या 50")
+                }
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            Text(
+                text =
+                    "JPEG Quality: $quality%",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Slider(
+                value = quality.toFloat(),
+                onValueChange = {
+                    quality =
+                        it.roundToInt()
+                },
+                valueRange =
+                    30f..100f,
+                steps = 69
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                text =
+                    "Quality कम करने से file size कम हो सकता है, लेकिन image quality भी कम हो सकती है।",
+                fontSize = 13.sp,
+                lineHeight = 20.sp
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            Button(
+                onClick = {
+                    resizeImage()
+                },
+                enabled = !isProcessing,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape =
+                    RoundedCornerShape(18.dp),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor =
+                            PhotoGreen
+                    )
+            ) {
+
+                if (isProcessing) {
+
+                    CircularProgressIndicator(
+                        modifier =
+                            Modifier.size(22.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+
+                    Spacer(
+                        Modifier.width(9.dp)
+                    )
+
+                    Text("Processing...")
+                } else {
+
+                    Icon(
+                        imageVector =
+                            Icons.Default.Compress,
+                        contentDescription = null
+                    )
+
+                    Spacer(
+                        Modifier.width(8.dp)
+                    )
+
+                    Text(
+                        text =
+                            "Resize & Compress",
+                        fontSize = 16.sp,
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = {
+                    reset()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape =
+                    RoundedCornerShape(16.dp)
+            ) {
+
+                Icon(
+                    imageVector =
+                        Icons.Default.Refresh,
+                    contentDescription = null
+                )
+
+                Spacer(
+                    Modifier.width(7.dp)
+                )
+
+                Text(
+                    text = "Reset",
+                    fontWeight =
+                        FontWeight.Bold
+                )
+            }
+        }
+
+        if (message.isNotEmpty()) {
+
+            Spacer(Modifier.height(14.dp))
+
+            Card(
+                modifier =
+                    Modifier.fillMaxWidth(),
+                shape =
+                    RoundedCornerShape(18.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor =
+                            if (success)
+                                SoftGreen
+                            else
+                                SoftOrange
+                    )
+            ) {
+
+                Row(
+                    modifier =
+                        Modifier.padding(16.dp),
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+
+                    Icon(
+                        imageVector =
+                            if (success)
+                                Icons.Default.CheckCircle
+                            else
+                                Icons.Default.Info,
+                        contentDescription =
+                            null,
+                        tint =
+                            if (success)
+                                PhotoGreen
+                            else
+                                PhotoOrange
+                    )
+
+                    Spacer(
+                        Modifier.width(10.dp)
+                    )
+
+                    Text(
+                        text = message,
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp
+                    )
+                }
+            }
+        }
+
+        // RESULT
+
+        if (outputBytes != null) {
+
+            Spacer(Modifier.height(20.dp))
+
+            Card(
+                modifier =
+                    Modifier.fillMaxWidth(),
+                shape =
+                    RoundedCornerShape(24.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor =
+                            SoftGreen
+                    )
+            ) {
+
+                Column(
+                    modifier =
+                        Modifier.padding(20.dp)
+                ) {
+
+                    Row(
+                        verticalAlignment =
+                            Alignment.CenterVertically
+                    ) {
+
+                        Icon(
+                            imageVector =
+                                Icons.Default.CheckCircle,
+                            contentDescription =
+                                null,
+                            tint = PhotoGreen
+                        )
+
+                        Spacer(
+                            Modifier.width(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "Ready",
+                            color =
+                                PhotoGreen,
+                            fontSize = 19.sp,
+                            fontWeight =
+                                FontWeight.ExtraBold
+                        )
+                    }
+
+                    Spacer(
+                        Modifier.height(12.dp)
+                    )
+
+                    InfoRow(
+                        "Output Dimensions",
+                        "${targetWidth} × ${targetHeight} px"
+                    )
+
+                    InfoRow(
+                        "Output Size",
+                        "$outputSizeKb KB"
+                    )
+
+                    Spacer(
+                        Modifier.height(14.dp)
+                    )
+
+                    Button(
+                        onClick = {
+                            message =
+                                "Image तैयार है। इसे app के storage/download flow से save किया जा सकता है।"
+                        },
+                        modifier =
+                            Modifier.fillMaxWidth(),
+                        shape =
+                            RoundedCornerShape(16.dp),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor =
+                                    PhotoGreen
+                            )
+                    ) {
+
+                        Icon(
+                            imageVector =
+                                Icons.Default.Download,
+                            contentDescription =
+                                null
+                        )
+
+                        Spacer(
+                            Modifier.width(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "Save / Download",
+                            fontWeight =
+                                FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        // ABOUT
+
+        InfoCard(
+            title =
+                "Photo Resizer कैसे काम करता है?",
+            icon =
+                Icons.Default.Info,
+            background =
+                SoftBlue
+        ) {
+
+            Text(
+                text =
+                    "Photo Resizer image की width और height को बदलकर उसके dimensions कम करता है। इसके बाद JPEG compression की मदद से file size भी कम किया जाता है।",
+                fontSize = 15.sp,
+                lineHeight = 23.sp
+            )
+
+            Spacer(
+                Modifier.height(10.dp)
+            )
+
+            Text(
+                text =
+                    "यह खास तौर पर उन online forms में उपयोगी है जहाँ photo को 20KB, 50KB या किसी निश्चित file size में upload करना होता है।",
+                fontSize = 15.sp,
+                lineHeight = 23.sp
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        InfoCard(
+            title = "File Size कम कैसे होता है?",
+            icon =
+                Icons.Default.Compress,
+            background =
+                SoftPurple
+        ) {
+
+            Text(
+                text =
+                    "File size मुख्य रूप से image के dimensions, JPEG quality और image के अंदर मौजूद details पर निर्भर करता है। Dimensions और quality कम करने से सामान्यतः file size भी कम हो जाता है।",
+                fontSize = 15.sp,
+                lineHeight = 23.sp
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        InfoCard(
+            title = "20KB / 50KB Photo के लिए Tips",
+            icon =
+                Icons.Default.PhotoSizeSelectLarge,
+            background =
+                SoftOrange
+        ) {
+
+            Bullet(
+                "पहले image के dimensions कम करें।"
+            )
+
+            Bullet(
+                "फिर JPEG quality adjust करें।"
+            )
+
+            Bullet(
+                "Target size 20KB या 50KB रखें।"
+            )
+
+            Bullet(
+                "बहुत ज्यादा compression से photo blurry हो सकती है।"
+            )
+
+            Bullet(
+                "Form submit करने से पहले photo की readability जरूर check करें।"
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        InfoCard(
+            title = "Privacy & Safety",
+            icon =
+                Icons.Default.Info,
+            background =
+                SoftGreen
+        ) {
+
+            Text(
+                text =
+                    "Photo processing device पर करना बेहतर है क्योंकि इससे personal images को unnecessary online server पर upload करने की जरूरत नहीं पड़ती। इस tool का उद्देश्य simple photo resizing और compression है।",
+                fontSize = 15.sp,
+                lineHeight = 23.sp
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        Text(
+            text =
+                "Frequently Asked Questions",
+            fontSize = 21.sp,
+            fontWeight =
+                FontWeight.ExtraBold
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        FaqCard(
+            "20KB photo कैसे बनाएं?",
+            "Photo select करें, target file size में 20 KB डालें और Resize & Compress दबाएं। जरूरत पड़ने पर dimensions और quality adjust करें।"
+        )
+
+        FaqCard(
+            "50KB photo कैसे बनाएं?",
+            "Target File Size में 50 KB डालकर image resize और compress करें।"
+        )
+
+        FaqCard(
+            "क्या photo quality खराब होगी?",
+            "Compression बढ़ाने पर quality कम हो सकती है। इसलिए जरूरत के अनुसार dimensions और JPEG quality का balance रखें।"
+        )
+
+        FaqCard(
+            "Photo का dimension क्या होता है?",
+            "Dimension image की width और height को pixels में बताता है, जैसे 800 × 800 px।"
+        )
+
+        FaqCard(
+            "क्या यह tool बिना internet काम कर सकता है?",
+            "इस implementation में image processing device पर होती है और image को server पर भेजने की आवश्यकता नहीं है।"
+        )
+
+        FaqCard(
+            "क्या सभी forms के लिए यही photo size सही है?",
+            "नहीं। अलग-अलग forms में अलग dimensions, KB limit और format requirements हो सकती हैं। हमेशा संबंधित form की official requirements देखें।"
+        )
+
+        Spacer(Modifier.height(30.dp))
+    }
+}
+
+
+// =====================================================
+// IMAGE INFORMATION
+// =====================================================
+
+private fun readImageInfo(
+    uri: Uri
+): Triple<Int, Int, Int>? {
+
+    return try {
+
+        val context =
+            AppContextHolder.context
+                ?: return null
+
+        val bytes =
+            context.contentResolver
+                .openInputStream(uri)
+                ?.use { it.readBytes() }
+                ?: return null
+
+        val options =
+            BitmapFactory.Options()
+
+        options.inJustDecodeBounds = true
+
+        BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            options
+        )
+
+        Triple(
+            options.outWidth,
+            options.outHeight,
+            bytes.size / 1024
+        )
+
+    } catch (_: Exception) {
+        null
+    }
+}
+
+
+// =====================================================
+// COMPRESS
+// =====================================================
+
+private fun compressImageToTarget(
+    uri: Uri,
+    width: Int,
+    height: Int,
+    targetKb: Int,
+    initialQuality: Int
+): ByteArray? {
+
+    return try {
+
+        val context =
+            AppContextHolder.context
+                ?: return null
+
+        val input =
+            context.contentResolver
+                .openInputStream(uri)
+                ?: return null
+
+        val original =
+            BitmapFactory.decodeStream(input)
+
+        input.close()
+
+        original ?: return null
+
+        val safeWidth =
+            width.coerceIn(50, 4000)
+
+        val safeHeight =
+            height.coerceIn(50, 4000)
+
+        val resized =
+            original.scale(
+                safeWidth,
+                safeHeight
+            )
+
+        var quality =
+            initialQuality.coerceIn(30, 100)
+
+        var result: ByteArray
+
+        do {
+
+            val stream =
+                ByteArrayOutputStream()
+
+            resized.compress(
+                Bitmap.CompressFormat.JPEG,
+                quality,
+                stream
+            )
+
+            result = stream.toByteArray()
+
+            stream.close()
+
+            if (
+                result.size / 1024 >
+                targetKb &&
+                quality > 30
+            ) {
+                quality -= 5
+            } else {
+                break
+            }
+
+        } while (quality >= 30)
+
+        resized.recycle()
+
+        result
+
+    } catch (_: Exception) {
+        null
+    }
+}
+
+
+// =====================================================
+// INFO ROW
+// =====================================================
+
+@Composable
+private fun InfoRow(
+    title: String,
+    value: String
+) {
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 5.dp),
+        horizontalArrangement =
+            Arrangement.SpaceBetween
+    ) {
+
+        Text(
+            text = title,
+            fontSize = 14.sp
         )
 
         Text(
-            text = "Target Size",
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-
-            FilterChip(
-                selected = selectedSize == 20,
-                onClick = {
-                    selectedSize = 20
-                },
-                label = {
-                    Text("20 KB")
-                }
-            )
-
-            FilterChip(
-                selected = selectedSize == 50,
-                onClick = {
-                    selectedSize = 50
-                },
-                label = {
-                    Text("50 KB")
-                }
-            )
-
-            FilterChip(
-                selected = selectedSize == 100,
-                onClick = {
-                    selectedSize = 100
-                },
-                label = {
-                    Text("100 KB")
-                }
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
-
-        OutlinedTextField(
-            value = customSize,
-            onValueChange = {
-                customSize = it
-                selectedSize = 0
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = {
-                Text("Custom Size (KB)")
-            },
-            placeholder = {
-                Text("जैसे 75")
-            },
-            singleLine = true
-        )
-
-        Spacer(
-            modifier = Modifier.height(18.dp)
-        )
-
-        Button(
-            onClick = {
-
-                val uri = selectedUri
-
-                if (uri == null) {
-                    status = "पहले photo select करें"
-                    return@Button
-                }
-
-                if (targetKb < 5) {
-                    status = "कम से कम 5 KB डालें"
-                    return@Button
-                }
-
-                status = "Photo compress हो रही है..."
-
-                compressedBytes = compressImageToTarget(
-                    context = context,
-                    uri = uri,
-                    targetKb = targetKb
-                )
-
-                status =
-                    if (compressedBytes != null) {
-                        "Compression complete"
-                    } else {
-                        "Photo compress नहीं हो सकी"
-                    }
-
-                savedUri = null
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = selectedUri != null
-        ) {
-            Text("🗜️ Compress Photo")
-        }
-
-        Spacer(
-            modifier = Modifier.height(18.dp)
-        )
-
-        previewBitmap?.let { bitmap ->
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-
-                Column(
-                    modifier = Modifier.padding(12.dp)
-                ) {
-
-                    Text(
-                        text = "Preview",
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(10.dp)
-                    )
-
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Selected photo",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(240.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-            }
-        }
-
-        compressedBytes?.let { bytes ->
-
-            Spacer(
-                modifier = Modifier.height(18.dp)
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-
-                Column(
-                    modifier = Modifier.padding(18.dp)
-                ) {
-
-                    Text(
-                        text = "Compression Result",
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Text(
-                        text = "Target: $targetKb KB"
-                    )
-
-                    Text(
-                        text = "Result: ${formatKb(bytes.size)} KB"
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-
-                        OutlinedButton(
-                            onClick = {
-
-                                val uri = saveImageToGallery(
-                                    context = context,
-                                    imageBytes = bytes
-                                )
-
-                                savedUri = uri
-
-                                status =
-                                    if (uri != null) {
-                                        "Photo Gallery में save हो गई"
-                                    } else {
-                                        "Photo save नहीं हो सकी"
-                                    }
-                            }
-                        ) {
-                            Text("💾 Save")
-                        }
-
-                        Spacer(
-                            modifier = Modifier.width(8.dp)
-                        )
-
-                        OutlinedButton(
-                            onClick = {
-
-                                shareImage(
-                                    context = context,
-                                    imageBytes = bytes
-                                )
-                            }
-                        ) {
-                            Text("📤 Share")
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        if (status.isNotEmpty()) {
-
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-
-                Text(
-                    text = status,
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
+            text = value,
+            fontSize = 14.sp,
+            fontWeight =
+                FontWeight.Bold
         )
     }
 }
 
-private fun loadBitmap(
-    context: Context,
-    uri: Uri
-): Bitmap? {
 
-    return try {
+// =====================================================
+// INFO CARD
+// =====================================================
 
-        context.contentResolver
-            .openInputStream(uri)
-            ?.use { input ->
-                BitmapFactory.decodeStream(input)
-            }
-
-    } catch (_: Exception) {
-        null
-    }
-}
-
-private fun compressImageToTarget(
-    context: Context,
-    uri: Uri,
-    targetKb: Int
-): ByteArray? {
-
-    val bitmap = loadBitmap(
-        context = context,
-        uri = uri
-    ) ?: return null
-
-    var workingBitmap = bitmap
-
-    var result = compressBitmap(
-        bitmap = workingBitmap,
-        quality = 90
-    )
-
-    var quality = 90
-
-    repeat(12) {
-
-        if (result.size <= targetKb * 1024) {
-            return result
-        }
-
-        quality -= 5
-
-        if (quality >= 10) {
-
-            result = compressBitmap(
-                bitmap = workingBitmap,
-                quality = quality
-            )
-        }
-    }
-
-    if (result.size <= targetKb * 1024) {
-        return result
-    }
-
-    var width = workingBitmap.width
-    var height = workingBitmap.height
-
-    repeat(8) {
-
-        width = (width * 0.85).roundToInt()
-        height = (height * 0.85).roundToInt()
-
-        if (width < 320 || height < 320) {
-            return@repeat
-        }
-
-        workingBitmap = Bitmap.createScaledBitmap(
-            workingBitmap,
-            width,
-            height,
-            true
-        )
-
-        quality = 85
-
-        result = compressBitmap(
-            bitmap = workingBitmap,
-            quality = quality
-        )
-
-        repeat(10) {
-
-            if (result.size <= targetKb * 1024) {
-                return result
-            }
-
-            quality -= 7
-
-            if (quality >= 10) {
-
-                result = compressBitmap(
-                    bitmap = workingBitmap,
-                    quality = quality
-                )
-            }
-        }
-
-        if (result.size <= targetKb * 1024) {
-            return result
-        }
-    }
-
-    return result
-}
-
-private fun compressBitmap(
-    bitmap: Bitmap,
-    quality: Int
-): ByteArray {
-
-    val outputStream = ByteArrayOutputStream()
-
-    bitmap.compress(
-        Bitmap.CompressFormat.JPEG,
-        quality.coerceIn(10, 100),
-        outputStream
-    )
-
-    return outputStream.toByteArray()
-}
-
-private fun saveImageToGallery(
-    context: Context,
-    imageBytes: ByteArray
-): Uri? {
-
-    return try {
-
-        val resolver = context.contentResolver
-
-        val fileName =
-            "HisaabKit_${System.currentTimeMillis()}.jpg"
-
-        val values = ContentValues().apply {
-
-            put(
-                MediaStore.Images.Media.DISPLAY_NAME,
-                fileName
-            )
-
-            put(
-                MediaStore.Images.Media.MIME_TYPE,
-                "image/jpeg"
-            )
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-                put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "Pictures/HisaabKit"
-                )
-
-                put(
-                    MediaStore.Images.Media.IS_PENDING,
-                    1
-                )
-            }
-        }
-
-        val uri = resolver.insert(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            values
-        ) ?: return null
-
-        try {
-
-            resolver.openOutputStream(uri)?.use { output ->
-                output.write(imageBytes)
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-                val completeValues = ContentValues().apply {
-                    put(
-                        MediaStore.Images.Media.IS_PENDING,
-                        0
-                    )
-                }
-
-                resolver.update(
-                    uri,
-                    completeValues,
-                    null,
-                    null
-                )
-            }
-
-            uri
-
-        } catch (e: Exception) {
-
-            resolver.delete(
-                uri,
-                null,
-                null
-            )
-
-            null
-        }
-
-    } catch (_: Exception) {
-        null
-    }
-}
-
-private fun shareImage(
-    context: Context,
-    imageBytes: ByteArray
+@Composable
+private fun InfoCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    background: Color,
+    content: @Composable () -> Unit
 ) {
 
-    try {
+    Card(
+        modifier =
+            Modifier.fillMaxWidth(),
+        shape =
+            RoundedCornerShape(22.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    background
+            )
+    ) {
 
-        val uri = saveImageToGallery(
-            context = context,
-            imageBytes = imageBytes
-        ) ?: return
+        Column(
+            modifier =
+                Modifier.padding(18.dp)
+        ) {
 
-        val shareIntent = Intent(
-            Intent.ACTION_SEND
-        ).apply {
+            Row(
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
 
-            type = "image/jpeg"
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = PhotoPurple
+                )
 
-            putExtra(
-                Intent.EXTRA_STREAM,
-                uri
+                Spacer(
+                    Modifier.width(9.dp)
+                )
+
+                Text(
+                    text = title,
+                    fontSize = 18.sp,
+                    fontWeight =
+                        FontWeight.ExtraBold
+                )
+            }
+
+            Spacer(
+                Modifier.height(12.dp)
             )
 
-            addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            content()
         }
-
-        context.startActivity(
-            Intent.createChooser(
-                shareIntent,
-                "Share Photo"
-            )
-        )
-
-    } catch (_: Exception) {
     }
 }
 
-private fun formatKb(
-    bytes: Int
-): String {
 
-    return String.format(
-        Locale.US,
-        "%.1f",
-        bytes / 1024.0
-    )
+// =====================================================
+// BULLET
+// =====================================================
+
+@Composable
+private fun Bullet(
+    text: String
+) {
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+        verticalAlignment =
+            Alignment.Top
+    ) {
+
+        Text(
+            text = "•",
+            color = PhotoPurple,
+            fontSize = 18.sp,
+            fontWeight =
+                FontWeight.Bold
+        )
+
+        Spacer(
+            Modifier.width(8.dp)
+        )
+
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            lineHeight = 21.sp
+        )
+    }
+}
+
+
+// =====================================================
+// FAQ
+// =====================================================
+
+@Composable
+private fun FaqCard(
+    question: String,
+    answer: String
+) {
+
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 5.dp),
+        shape =
+            RoundedCornerShape(18.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    MaterialTheme.colorScheme.surface
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp
+            )
+    ) {
+
+        Column(
+            modifier =
+                Modifier.padding(16.dp)
+        ) {
+
+            Text(
+                text = question,
+                fontSize = 15.sp,
+                fontWeight =
+                    FontWeight.ExtraBold
+            )
+
+            Spacer(
+                Modifier.height(7.dp)
+            )
+
+            Text(
+                text = answer,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                color =
+                    MaterialTheme.colorScheme
+                        .onSurfaceVariant
+            )
+        }
+    }
 }
