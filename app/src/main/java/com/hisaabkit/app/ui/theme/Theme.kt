@@ -7,11 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val ColorDarkSurfaceVariant =
-    Color(0xFF2A2730)
-
 private val LightColors = lightColorScheme(
-
     primary = HisaabKitPrimary,
     onPrimary = HisaabKitOnPrimary,
 
@@ -35,7 +31,6 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-
     primary = HisaabKitPrimaryDark,
     onPrimary = HisaabKitOnPrimaryDark,
 
@@ -54,7 +49,7 @@ private val DarkColors = darkColorScheme(
     surface = HisaabKitSurfaceDark,
     onSurface = HisaabKitOnPrimaryDark,
 
-    surfaceVariant = ColorDarkSurfaceVariant,
+    surfaceVariant = Color(0xFF2A2730),
     onSurfaceVariant = HisaabKitOnPrimaryDark
 )
 
@@ -63,7 +58,6 @@ fun HisaabKitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-
     val colors = if (darkTheme) {
         DarkColors
     } else {
