@@ -1,5 +1,6 @@
 package com.hisaabkit.app.tools.emi
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
