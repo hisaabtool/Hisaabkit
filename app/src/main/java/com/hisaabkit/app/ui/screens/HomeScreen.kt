@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,31 +49,11 @@ fun HomeScreen(
 
     val tools = remember {
         listOf(
-            Tool(
-                "EMI Calculator",
-                "Loan EMI और interest",
-                Icons.Default.Calculate
-            ),
-            Tool(
-                "Bike Loan EMI",
-                "Bike loan का हिसाब",
-                Icons.Default.AccountBalance
-            ),
-            Tool(
-                "EMI Prepayment",
-                "Loan जल्दी खत्म करें",
-                Icons.Default.Calculate
-            ),
-            Tool(
-                "Bigha / Biswa",
-                "जमीन का area",
-                Icons.Default.Home
-            ),
-            Tool(
-                "Photo Resizer",
-                "20KB / 50KB photo",
-                Icons.Default.Image
-            )
+            Tool("EMI Calculator", "Loan EMI और interest", Icons.Default.Calculate),
+            Tool("Bike Loan EMI", "Bike loan का हिसाब", Icons.Default.AccountBalance),
+            Tool("EMI Prepayment", "Loan जल्दी खत्म करें", Icons.Default.Calculate),
+            Tool("Bigha / Biswa", "जमीन का area", Icons.Default.Home),
+            Tool("Photo Resizer", "20KB / 50KB photo", Icons.Default.Image)
         )
     }
 
@@ -110,10 +89,7 @@ fun HomeScreen(
                 Text("आपको क्या calculate करना है?")
             },
             leadingIcon = {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = "Search"
-                )
+                Icon(Icons.Default.Search, contentDescription = "Search")
             }
         )
 
@@ -127,21 +103,18 @@ fun HomeScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // FIX: Changed fillMaxSize() to weight(1f) to prevent layout crash
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f), 
             contentPadding = PaddingValues(bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
             items(tools) { tool ->
-
                 ToolCard(
                     tool = tool,
-                    onClick = {
-                        onToolClick(tool.title)
-                    }
+                    onClick = { onToolClick(tool.title) }
                 )
             }
         }
@@ -153,7 +126,6 @@ private fun ToolCard(
     tool: Tool,
     onClick: () -> Unit
 ) {
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,14 +136,12 @@ private fun ToolCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-
             Box(
                 modifier = Modifier
                     .size(46.dp)
@@ -188,7 +158,6 @@ private fun ToolCard(
             }
 
             Column {
-
                 Text(
                     text = tool.title,
                     style = MaterialTheme.typography.titleMedium,
